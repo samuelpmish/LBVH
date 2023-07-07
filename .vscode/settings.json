@@ -1,0 +1,7 @@
+{
+    "cmake.configureArgs": [
+        "-DLBVH_ENABLE_TESTING=TRUE",
+        "-DLBVH_ENABLE_PYTHON_BINDINGS=TRUE",
+        "-DLBVH_ENABLE_MATHEMATICA_BINDINGS=TRUE",
+    ]
+}
