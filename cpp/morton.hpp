@@ -11,7 +11,17 @@ inline uint32_t clz(uint32_t n) {
   return (n == 0) ? 32 : __builtin_clzll(n); 
 }
 #else
-//#ifdef _WIN32
+// windows
+inline uint64_t unpack64_msb(uint64_t ab, uint64_t shift = 32) {
+  uint64_t mask = (uint64_t(1) << shift) - 1;
+  return ((ab >> shift) & mask);
+}
+
+inline uint64_t unpack64_lsb(uint64_t ab, uint32_t shift = 32) {
+  uint64_t mask = (uint64_t(1) << shift) - 1;
+  return (ab & mask);
+}
+
 inline uint32_t clz(uint32_t n) {
   uint32_t index;
   uint8_t isNonzero = _BitScanReverse((unsigned long *)&index, n);
