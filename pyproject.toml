@@ -48,7 +48,7 @@ sdist.exclude = ["mathematica"]
 # Necessary to see build output from the actual compilation
 build-verbosity = 1
 
-skip = ["cp312-*"] # Skip CPython 3.12
+skip = ["cp312-*"] # Skip CPython 3.12, see https://github.com/pypa/pip/issues/11501
 archs = ["auto64"] # Only target 64 bit architectures
 
 # Run pytest to ensure that the package was correctly built
