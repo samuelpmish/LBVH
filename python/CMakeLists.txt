@@ -1,7 +1,7 @@
 include(FetchContent)
 FetchContent_Declare(
   nanobind
-  GIT_REPOSITORY git@github.com:wjakob/nanobind.git
+  GIT_REPOSITORY https://github.com/wjakob/nanobind.git
 )
 FetchContent_MakeAvailable(nanobind)
 
