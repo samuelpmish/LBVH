@@ -49,7 +49,7 @@ sdist.exclude = ["mathematica"]
 build-verbosity = 1
 
 # Skip PyPy, CPython 3.12, see https://github.com/pypa/pip/issues/11501
-skip = ["cp312-*", "pp*"]]
+skip = ["cp312-*", "pp*"]
 
 # Only target 64 bit architectures
 archs = ["auto64"] 
