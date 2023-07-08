@@ -1,4 +1,4 @@
-#include "LBVH.hpp"
+#include "BVH.hpp"
 #include "morton.hpp"
 
 #include <tuple>
@@ -7,7 +7,7 @@
 #include <iostream>
 
 template < int dim >
-LBVH<dim>::LBVH(const std::vector< AABB_t > & leaves) {
+BVH<dim>::BVH(const std::vector< AABB_t > & leaves) {
 
   num_leaves = static_cast < int32_t >(leaves.size());
 
@@ -165,5 +165,5 @@ LBVH<dim>::LBVH(const std::vector< AABB_t > & leaves) {
 
 }
 
-template struct LBVH<2>;
-template struct LBVH<3>;
+template struct BVH<2>;
+template struct BVH<3>;

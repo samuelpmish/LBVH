@@ -6,7 +6,7 @@
 #include "AABB.hpp"
 
 template < int dim >
-class LBVH {
+class BVH {
  public:
   struct int2 { 
     int x;
@@ -23,11 +23,11 @@ class LBVH {
   std::vector< AABB_t > boxes;
   std::vector< int2 > children;
 
-  LBVH() {}
+  BVH() {}
 
-  LBVH(const std::vector< AABB_t > &);
+  BVH(const std::vector< AABB_t > &);
 
-  // traverse the LBVH for intersections with `box` 
+  // traverse the BVH for intersections with `box` 
   // and invoke `f` when finding a hit with a leaf node
   // note: f will be invoked with the argument of the leaf node
   template < typename callable >

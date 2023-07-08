@@ -7,8 +7,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 file(GLOB lbvh_headers ${PROJECT_SOURCE_DIR}/cpp/*.hpp)
 file(GLOB lbvh_sources ${PROJECT_SOURCE_DIR}/cpp/*.cpp)
-add_library(LBVH ${lbvh_sources} ${lbvh_headers})
-target_include_directories(LBVH PUBLIC ${PROJECT_SOURCE_DIR}/cpp)
+add_library(libLBVH ${lbvh_sources} ${lbvh_headers})
+target_include_directories(libLBVH PUBLIC ${PROJECT_SOURCE_DIR}/cpp)
+set_target_properties(libLBVH PROPERTIES PREFIX "")
 
 if (LBVH_ENABLE_PYTHON_BINDINGS)
   add_subdirectory(python)
