@@ -62,10 +62,10 @@ jobs:
 
 
   upload_all:
-    name: Upload if release
+    name: Upload
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
+    #if: github.event_name == 'release' && github.event.action == 'published'
 
     steps:
     - uses: actions/setup-python@v4
@@ -75,7 +75,7 @@ jobs:
         name: artifact
         path: dist
 
-    - uses: pypa/gh-action-pypi-publish@v1
-      with:
-        user: __token__
-        password: ${{ secrets.pypi_password }}
+    #- uses: pypa/gh-action-pypi-publish@v1
+    #  with:
+    #    user: __token__
+    #    password: ${{ secrets.pypi_password }}
