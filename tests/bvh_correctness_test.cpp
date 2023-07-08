@@ -50,9 +50,7 @@ void run_test(int n) {
   std::sort(pairs2.begin(), pairs2.end());
 
   for (int i = 0; i < pairs1.size(); i++) {
-    for (int d = 0; d < dim; d++) {
-      EXPECT_EQ(pairs1[i][d], pairs2[i][d]);
-    }
+    EXPECT_EQ(pairs1[i], pairs2[i]);
   }
 
 }
