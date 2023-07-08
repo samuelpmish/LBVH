@@ -11,6 +11,10 @@ add_library(libLBVH ${lbvh_sources} ${lbvh_headers})
 target_include_directories(libLBVH PUBLIC ${PROJECT_SOURCE_DIR}/cpp)
 set_target_properties(libLBVH PROPERTIES PREFIX "")
 
+if(UNIX AND NOT APPLE)
+  set_property(TARGET libLBVH PROPERTY POSITION_INDEPENDENT_CODE ON)
+endif()
+
 if (LBVH_ENABLE_PYTHON_BINDINGS)
   add_subdirectory(python)
 endif()
