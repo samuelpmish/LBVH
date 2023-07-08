@@ -1,5 +1,5 @@
 #include "AABB.hpp"
-#include "LBVH.hpp"
+#include "BVH.hpp"
 
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include "nanobench.h"
@@ -30,7 +30,7 @@ std::vector< AABB<dim> > random_AABBs(int n) {
 template < int dim >
 int find_intersections_lbvh(const std::vector< AABB<dim> > & boxes) {
   int count = 0;
-  LBVH<dim> bvh(boxes);
+  BVH<dim> bvh(boxes);
   for (int i = 0; i < boxes.size(); i++) {
     bvh.query(boxes[i], [&](int j){ if (i < j) count++; });
   }

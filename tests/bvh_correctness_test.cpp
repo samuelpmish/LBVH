@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "AABB.hpp"
-#include "LBVH.hpp"
+#include "BVH.hpp"
 
 #include <random>
 
@@ -29,7 +29,7 @@ void run_test(int n) {
 
   auto boxes = random_AABBs<dim>(n);
 
-  LBVH<dim> bvh(boxes);
+  BVH<dim> bvh(boxes);
   std::vector< std::array<int, 2> > pairs1;
   for (int i = 0; i < n; i++) {
     bvh.query(boxes[i], [&](int j){ if (i < j) pairs1.push_back({i, j}); });
@@ -57,10 +57,10 @@ void run_test(int n) {
 
 }
 
-TEST(UnitTest, LBVHIntersection2D) {
+TEST(UnitTest, BVHIntersection2D) {
   run_test<2>(1000);
 }
 
-TEST(UnitTest, LBVHIntersection3D) {
+TEST(UnitTest, BVHIntersection3D) {
   run_test<3>(1000);
 }
