@@ -18,8 +18,6 @@ To install python bindings for use with `jax` or `numpy`, do
 pip3 install lbvh
 ```
 
-and see https://github.com/samuelpmish/LBVH/tree/main/python for some basic examples of bounding box queries.
-
 The python bindings expect arrays of bounding boxes to be specified in one of the following formats:
 
 ```py
@@ -35,6 +33,8 @@ The python bindings expect arrays of bounding boxes to be specified in one of th
 # list of 3D bounding boxes, as arrays with shape (*, 2, 3)
 [[[min_x, min_y, min_z], [max_x, max_y, max_z]], ... ]
 ```
+
+See https://github.com/samuelpmish/LBVH/tree/main/python for some basic examples of bounding box queries.
 
 
 ## C++
