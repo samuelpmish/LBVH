@@ -20,19 +20,19 @@ pip3 install lbvh
 
 and see https://github.com/samuelpmish/LBVH/tree/main/python for some basic examples of bounding box queries.
 
-The python bindings expect bounding boxes to be specified in one of the following formats:
+The python bindings expect arrays of bounding boxes to be specified in one of the following formats:
 
 ```py
-# 2D, with shape (*, 4)
+# list of 2D bounding boxes, as arrays with shape (*, 4)
 [[min_x, min_y, max_x, max_y], ... ]
 
-# 2D with shape (*, 2, 2)
+# list of 2D bounding boxes, as arrays with shape (*, 2, 2)
 [[[min_x, min_y], [max_x, max_y]], ... ]
 
-# 3D, with shape (*, 6)
+# list of 3D bounding boxes, as arrays with shape (*, 6)
 [[min_x, min_y, min_z, max_x, max_y, max_z], ... ]
 
-# 3D with shape (*, 2, 3)
+# list of 3D bounding boxes, as arrays with shape (*, 2, 3)
 [[[min_x, min_y, min_z], [max_x, max_y, max_z]], ... ]
 ```
 
