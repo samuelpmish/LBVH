@@ -78,6 +78,15 @@ auto operator*(const double a, const tensor<T, n...>& b) {
 }
 
 template <typename T, int... n>
+auto operator*(const tensor<T, n...>& A, const tensor<T, n...>& B) {
+  tensor<T, n...> C{};
+  for (int i = 0; i < (n * ...); i++) {
+    ((T*)C.values)[i] = ((T*)A.values)[i] * ((T*)B.values)[i];
+  }
+  return C;
+}
+
+template <typename T, int... n>
 auto operator/(const tensor<T, n...> a, const double b) {
   tensor<T, n...> c{};
   for (int i = 0; i < (n * ...); i++) {
