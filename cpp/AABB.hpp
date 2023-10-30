@@ -1,11 +1,21 @@
 #pragma once
 
+#include "tensor.hpp"
+
 #include <algorithm>
 
 template < int dim, typename T = float >
 struct AABB { 
-  T min[dim]; 
-  T max[dim]; 
+  tensor<T, dim> min; 
+  tensor<T, dim> max; 
+
+  T SDF(const tensor<T,dim> & p) const {
+    constexpr T zero{};
+    auto center = (min + max) * 0.5f;
+    auto halfwidths = (max - min) * 0.5f;
+    auto q = abs(p - center) - halfwidths;
+    return norm(::max(q,zero)) + std::min(std::max(q[0],std::max(q[1], q[2])), zero);
+  }
 };
 
 template< typename T = float >
