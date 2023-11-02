@@ -1,0 +1,32 @@
+name: test
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+jobs:
+  build_sdist:
+    name: Build SDist
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+        
+      - uses: lukka/get-cmake@latest
+
+      - name: configure cmake
+        env:
+          CXX: ${{ matrix.compiler }}
+        shell: bash
+        working-directory: ${{ runner.workspace }}/_build
+        run: >
+          cmake -C ${{ github.workspace }}/compiler-cache.cmake
+          $GITHUB_WORKSPACE
+
+      - name: build
+        shell: bash
+        working-directory: ${{ runner.workspace }}/_build
+        run: cmake --build .
