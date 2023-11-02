@@ -19,13 +19,9 @@ jobs:
       #- uses: lukka/get-cmake@latest
 
       - name: configure cmake
-        env:
-          CXX: ${{ matrix.compiler }}
-        shell: bash
         working-directory: ${{ runner.workspace }}/_build
         run: >
-          cmake -C ${{ github.workspace }}/compiler-cache.cmake
-          $GITHUB_WORKSPACE
+          cmake $GITHUB_WORKSPACE
 
       - name: build
         shell: bash
