@@ -11,6 +11,8 @@ BVH<dim>::BVH(const std::vector< AABB_t > & leaves) {
 
   num_leaves = static_cast < int32_t >(leaves.size());
 
+  if (num_leaves == 0) return;
+
   boxes = std::vector < AABB_t >(2 * num_leaves - 1);
   children = std::vector < int2 >(2 * num_leaves - 1);
   ids = std::vector < int32_t >(2 * num_leaves - 1, 0);
