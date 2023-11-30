@@ -6,8 +6,7 @@
 #include "AABB.hpp"
 
 template < int dim >
-class BVH {
- public:
+struct BVH {
   struct int2 { 
     int x;
     int y; 
