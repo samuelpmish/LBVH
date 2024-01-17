@@ -63,8 +63,14 @@ nb::ndarray< nb::numpy, int, nb::shape<nb::any, 2> > find_pairs(const std::vecto
   for (int i = 0; i < boxes.size(); i++) {
     bvh.query(boxes[i], [&](int j){ if (i < j) pairs.push_back({i, j}); });
   }
+
+  // Delete 'data' when the 'owner' capsule expires
+  int * data = new int[pairs.size() * 2];
+  nb::capsule owner(data, [](void *p) noexcept {
+     delete[] (float *) p;
+  });
   
-  nb::ndarray<nb::numpy, int, nb::shape<nb::any, 2> > output(new int[pairs.size() * 2], {pairs.size(), 2});
+  nb::ndarray<nb::numpy, int, nb::shape<nb::any, 2> > output(data, {pairs.size(), 2}, owner);
   for (int i = 0; i < pairs.size(); i++) {
     output(i, 0) = pairs[i][0];
     output(i, 1) = pairs[i][1];
