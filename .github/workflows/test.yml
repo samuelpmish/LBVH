@@ -15,8 +15,8 @@ jobs:
         with:
           submodules: true
 
-      - uses: lukka/get-cmake@dev/fix91
-      #- uses: lukka/get-cmake@latest
+      #- uses: lukka/get-cmake@dev/fix91
+      - uses: lukka/get-cmake@latest
 
       - name: configure cmake
         working-directory: ${{ runner.workspace }}/_build
