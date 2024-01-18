@@ -32,6 +32,9 @@ struct tensor< T, m > {
 template < int n >
 using vec = tensor<double, n>;
 
+template < int n >
+using vecf = tensor<float, n>;
+
 using vec2 = tensor<double, 2>;
 using vec3 = tensor<double, 3>;
 using mat3 = tensor<double, 3,3>;
