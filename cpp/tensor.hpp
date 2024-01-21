@@ -255,50 +255,52 @@ constexpr tensor<T, n> linear_solve(tensor<T, n, n> A,
   return x;
 }
 
-template < typename T >
-constexpr tensor<T, 2, 2> inv(const tensor<T, 2, 2>& A) {
-  T inv_detA(1.0 / det(A));
-
-  tensor<T, 2, 2> invA{};
-
-  invA(0, 0) = A(1, 1) * inv_detA;
-  invA(0, 1) = -A(0, 1) * inv_detA;
-  invA(1, 0) = -A(1, 0) * inv_detA;
-  invA(1, 1) = A(0, 0) * inv_detA;
-
-  return invA;
-}
-
-template < typename T >
-constexpr tensor<T, 3, 3> inv(const tensor<T, 3, 3>& A) {
-  T inv_detA(1.0 / det(A));
-
-  tensor<T, 3, 3> invA{};
-
-  invA(0, 0) = (A(1, 1) * A(2, 2) - A(1, 2) * A(2, 1)) * inv_detA;
-  invA(0, 1) = (A(0, 2) * A(2, 1) - A(0, 1) * A(2, 2)) * inv_detA;
-  invA(0, 2) = (A(0, 1) * A(1, 2) - A(0, 2) * A(1, 1)) * inv_detA;
-  invA(1, 0) = (A(1, 2) * A(2, 0) - A(1, 0) * A(2, 2)) * inv_detA;
-  invA(1, 1) = (A(0, 0) * A(2, 2) - A(0, 2) * A(2, 0)) * inv_detA;
-  invA(1, 2) = (A(0, 2) * A(1, 0) - A(0, 0) * A(1, 2)) * inv_detA;
-  invA(2, 0) = (A(1, 0) * A(2, 1) - A(1, 1) * A(2, 0)) * inv_detA;
-  invA(2, 1) = (A(0, 1) * A(2, 0) - A(0, 0) * A(2, 1)) * inv_detA;
-  invA(2, 2) = (A(0, 0) * A(1, 1) - A(0, 1) * A(1, 0)) * inv_detA;
-
-  return invA;
-}
-
 template <typename T, int n>
 constexpr tensor<T, n, n> inv(const tensor<T, n, n>& A) {
-  tensor<T, n, n> invA{};
-  for (int j = 0; j < n; j++) {
-    tensor<T, n> e_j{}; e_j[j] = 1.0;
-    auto col = linear_solve(A, e_j);
-    for (int i = 0; i < n; i++) {
-      invA(i, j) = col(i);
-    }
+
+  if constexpr (n == 0) {
+    return tensor<T,1,1>{{1.0 / A(0,0)}};
   }
-  return invA;
+
+  if constexpr (n == 2) {
+    T inv_detA(1.0 / det(A));
+    tensor<T, 2, 2> invA{};
+    invA(0, 0) = A(1, 1) * inv_detA;
+    invA(0, 1) = -A(0, 1) * inv_detA;
+    invA(1, 0) = -A(1, 0) * inv_detA;
+    invA(1, 1) = A(0, 0) * inv_detA;
+    return invA;
+  }
+
+  if constexpr (n == 3) {
+    T inv_detA(1.0 / det(A));
+
+    tensor<T, 3, 3> invA{};
+    invA(0, 0) = (A(1, 1) * A(2, 2) - A(1, 2) * A(2, 1)) * inv_detA;
+    invA(0, 1) = (A(0, 2) * A(2, 1) - A(0, 1) * A(2, 2)) * inv_detA;
+    invA(0, 2) = (A(0, 1) * A(1, 2) - A(0, 2) * A(1, 1)) * inv_detA;
+    invA(1, 0) = (A(1, 2) * A(2, 0) - A(1, 0) * A(2, 2)) * inv_detA;
+    invA(1, 1) = (A(0, 0) * A(2, 2) - A(0, 2) * A(2, 0)) * inv_detA;
+    invA(1, 2) = (A(0, 2) * A(1, 0) - A(0, 0) * A(1, 2)) * inv_detA;
+    invA(2, 0) = (A(1, 0) * A(2, 1) - A(1, 1) * A(2, 0)) * inv_detA;
+    invA(2, 1) = (A(0, 1) * A(2, 0) - A(0, 0) * A(2, 1)) * inv_detA;
+    invA(2, 2) = (A(0, 0) * A(1, 1) - A(0, 1) * A(1, 0)) * inv_detA;
+
+    return invA;
+  }
+
+  if constexpr (n > 3) {
+    tensor<T, n, n> invA{};
+    for (int j = 0; j < n; j++) {
+      tensor<T, n> e_j{}; e_j[j] = 1.0;
+      auto col = linear_solve(A, e_j);
+      for (int i = 0; i < n; i++) {
+        invA(i, j) = col(i);
+      }
+    }
+    return invA;
+  }
+
 }
 
 template <typename T, int dim>
