@@ -67,7 +67,7 @@ nb::ndarray< nb::numpy, int, nb::shape<nb::any, 2> > find_pairs(const std::vecto
   // Delete 'data' when the 'owner' capsule expires
   int * data = new int[pairs.size() * 2];
   nb::capsule owner(data, [](void *p) noexcept {
-     delete[] (float *) p;
+     delete[] (int *) p;
   });
   
   nb::ndarray<nb::numpy, int, nb::shape<nb::any, 2> > output(data, {pairs.size(), 2}, owner);
