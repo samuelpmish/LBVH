@@ -30,7 +30,7 @@ struct BVH {
   // and invoke `f` when finding a hit with a leaf node
   // note: f will be invoked with the argument of the leaf node
   template < typename callable >
-  void query(AABB_t box, callable f) {
+  void query(AABB_t box, callable f) const {
 
     // Allocate traversal stack from thread-local memory,
     // and push NULL to indicate that there are no postponed nodes.
