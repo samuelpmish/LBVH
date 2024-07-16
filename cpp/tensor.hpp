@@ -45,6 +45,7 @@ using vec4f = tensor<float, 4>;
 using mat2f = tensor<float, 2,2>;
 using mat3f = tensor<float, 3,3>;
 using mat4x2f = tensor<float, 4,2>;
+using mat4x3f = tensor<float, 4,3>;
 using mat2x4f = tensor<float, 2,4>;
 
 template <typename T, int... n>
