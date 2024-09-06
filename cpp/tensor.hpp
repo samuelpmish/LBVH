@@ -415,8 +415,23 @@ constexpr tensor<T, m, n> outer(tensor<T, m> u, tensor<T, n> v) {
 }
 
 template < typename T >
-inline tensor<T, 2> xy(const tensor<T, 3> & xyz) {
-  return {xyz[0], xyz[1]};
+inline tensor<T, 2> xy(const tensor<T, 3> & v) {
+  return {v[0], v[1]};
+}
+
+template < typename T >
+inline tensor<T, 2> xy(const tensor<T, 2> & v) {
+  return v;
+}
+
+template < typename T >
+inline tensor<T, 3> xyz(const tensor<T, 2> & v) {
+  return {v[0], v[1], T{}};
+}
+
+template < typename T >
+inline tensor<T, 3> xyz(const tensor<T, 3> & v) {
+  return v;
 }
 
 template < typename T, int n >
