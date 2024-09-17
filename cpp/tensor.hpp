@@ -467,6 +467,24 @@ inline tensor<T, n> max(const tensor<T, n> & v, T value) {
 template < typename T, int n >
 inline tensor<T, n> max(T value, const tensor<T, n> & v) { return max(v, value); }
 
+template < typename T, int n >
+inline T min(const tensor<T, n> & v) { 
+  T minval = v[0];
+  for (int i = 0; i < n; i++) {
+    minval = std::min(minval, v[i]);
+  }
+  return minval;
+}
+
+template < typename T, int n >
+inline T max(const tensor<T, n> & v) { 
+  T maxval = v[0];
+  for (int i = 0; i < n; i++) {
+    maxval = std::max(maxval, v[i]);
+  }
+  return maxval;
+}
+
 template < typename T >
 T clamp(const T & value, const T & lower, const T & upper) {
   return std::max(lower, std::min(value, upper));

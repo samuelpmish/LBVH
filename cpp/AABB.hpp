@@ -14,7 +14,7 @@ struct AABB {
     auto center = (min + max) * 0.5f;
     auto halfwidths = (max - min) * 0.5f;
     auto q = abs(p - center) - halfwidths;
-    return norm(::max(q,zero)) + std::min(std::max(q[0],std::max(q[1], q[2])), zero);
+    return norm(::max(q,zero)) + std::min(::max(q), zero);
   }
 };
 
