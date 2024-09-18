@@ -11,8 +11,10 @@ namespace nb = nanobind;
 
 using namespace nb::literals;
 
+static constexpr int any = -1;
+
 template < int dim >
-std::vector< AABB<dim> > convert_matrices_to_AABBs(nb::ndarray< nb::numpy, const float, nb::shape<nb::any, 2, dim> > arr) {
+std::vector< AABB<dim> > convert_matrices_to_AABBs(nb::ndarray< nb::numpy, const float, nb::shape<any, 2, dim> > arr) {
   size_t n = arr.shape(0);
   std::vector< AABB<dim> > output(n);
   for (size_t i = 0; i < n; i++) {
@@ -34,7 +36,7 @@ std::vector< AABB<dim> > convert_matrices_to_AABBs(nb::ndarray< nb::numpy, const
 }
 
 template < int dim >
-std::vector< AABB<dim> > convert_vectors_to_AABBs(nb::ndarray< nb::numpy, const float, nb::shape<nb::any, 2 * dim> > arr) {
+std::vector< AABB<dim> > convert_vectors_to_AABBs(nb::ndarray< nb::numpy, const float, nb::shape<any, 2 * dim> > arr) {
   size_t n = arr.shape(0);
   std::vector< AABB<dim> > output(n);
   for (size_t i = 0; i < n; i++) {
@@ -56,7 +58,7 @@ std::vector< AABB<dim> > convert_vectors_to_AABBs(nb::ndarray< nb::numpy, const 
 }
 
 template < int dim >
-nb::ndarray< nb::numpy, int, nb::shape<nb::any, 2> > find_pairs(const std::vector< AABB<dim> > & boxes) {
+nb::ndarray< nb::numpy, int, nb::shape<any, 2> > find_pairs(const std::vector< AABB<dim> > & boxes) {
   BVH<dim> bvh(boxes);
 
   std::vector< std::array< int, 2 > > pairs;
@@ -70,7 +72,7 @@ nb::ndarray< nb::numpy, int, nb::shape<nb::any, 2> > find_pairs(const std::vecto
      delete[] (int *) p;
   });
   
-  nb::ndarray<nb::numpy, int, nb::shape<nb::any, 2> > output(data, {pairs.size(), 2}, owner);
+  nb::ndarray<nb::numpy, int, nb::shape<any, 2> > output(data, {pairs.size(), 2}, owner);
   for (int i = 0; i < pairs.size(); i++) {
     output(i, 0) = pairs[i][0];
     output(i, 1) = pairs[i][1];
@@ -80,19 +82,19 @@ nb::ndarray< nb::numpy, int, nb::shape<nb::any, 2> > find_pairs(const std::vecto
 }
 
 NB_MODULE(LBVH, m) {
-  m.def("find_intersections", [](nb::ndarray< nb::numpy, const float, nb::shape<nb::any, 4> > boxes) {
+  m.def("find_intersections", [](nb::ndarray< nb::numpy, const float, nb::shape<any, 4> > boxes) {
     return find_pairs(convert_vectors_to_AABBs<2>(boxes));
   });
 
-  m.def("find_intersections", [](nb::ndarray< nb::numpy, const float, nb::shape<nb::any, 6> > boxes) {
+  m.def("find_intersections", [](nb::ndarray< nb::numpy, const float, nb::shape<any, 6> > boxes) {
     return find_pairs(convert_vectors_to_AABBs<3>(boxes));
   });
 
-  m.def("find_intersections", [](nb::ndarray< nb::numpy, const float, nb::shape<nb::any, 2, 2> > boxes) {
+  m.def("find_intersections", [](nb::ndarray< nb::numpy, const float, nb::shape<any, 2, 2> > boxes) {
     return find_pairs(convert_matrices_to_AABBs<2>(boxes));
   });
 
-  m.def("find_intersections", [](nb::ndarray< nb::numpy, const float, nb::shape<nb::any, 2, 3> > boxes) {
+  m.def("find_intersections", [](nb::ndarray< nb::numpy, const float, nb::shape<any, 2, 3> > boxes) {
     return find_pairs(convert_matrices_to_AABBs<3>(boxes));
   });
 }

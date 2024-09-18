@@ -1,10 +1,3 @@
-include(FetchContent)
-FetchContent_Declare(
-  nanobind
-  GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-)
-FetchContent_MakeAvailable(nanobind)
-
 find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 nanobind_add_module(
     
