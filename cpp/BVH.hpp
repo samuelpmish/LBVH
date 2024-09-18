@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdint>
 
-#include "AABB.hpp"
+#include "fm/types/AABB.hpp"
 
 template < int dim >
 struct BVH {
@@ -13,7 +13,7 @@ struct BVH {
   };
 
   using code_t = uint64_t;
-  using AABB_t = AABB<dim,float>;
+  using AABB_t = fm::AABB<dim,float>;
 
   AABB_t global;
 

@@ -2,7 +2,9 @@
     "cmake.configureArgs": [
         "-DLBVH_ENABLE_TESTING=TRUE",
         "-DLBVH_ENABLE_PYTHON_BINDINGS=TRUE",
-        "-DLBVH_ENABLE_MATHEMATICA_BINDINGS=FALSE",
+        "-DLBVH_ENABLE_MATHEMATICA_BINDINGS=TRUE",
+        "--profiling-format=google-trace",
+        "--profiling-output=cmake-configuration-stage-profiling-data.json"
     ],
     "files.associations": {
         "cmath": "cpp",

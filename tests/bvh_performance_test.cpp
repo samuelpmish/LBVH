@@ -1,4 +1,3 @@
-#include "AABB.hpp"
 #include "BVH.hpp"
 
 #define ANKERL_NANOBENCH_IMPLEMENT
@@ -7,6 +6,9 @@
 #include <array>
 #include <random>
 #include <iostream>
+
+template < int dim >
+using AABB = fm::AABB<dim>;
 
 float random_real() {
   static std::default_random_engine generator;

@@ -7,6 +7,8 @@
 
 #include "BVH.hpp"
 
+using fm::AABB;
+
 namespace nb = nanobind;
 
 using namespace nb::literals;

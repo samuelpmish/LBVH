@@ -25,6 +25,7 @@ endif()
 
 include(FetchContent)
 include(cmake/fm.cmake)
+target_link_libraries(libLBVH PUBLIC fm)
 
 if (LBVH_ENABLE_PYTHON_BINDINGS)
   include(cmake/nanobind.cmake)
@@ -38,5 +39,6 @@ if (LBVH_ENABLE_MATHEMATICA_BINDINGS)
 endif()
 
 if (LBVH_ENABLE_TESTING)
+  include(cmake/gtest.cmake)
   add_subdirectory(tests)
 endif()
