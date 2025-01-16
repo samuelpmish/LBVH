@@ -1,7 +1,7 @@
 if (NOT TARGET fm)
   FetchContent_Declare(
     TPL_FM
-    GIT_REPOSITORY git@github.com:samuelpmish/fm.git
+    GIT_REPOSITORY https://github.com/samuelpmish/fm.git
     GIT_TAG main
     GIT_SHALLOW  TRUE
     GIT_PROGRESS TRUE
