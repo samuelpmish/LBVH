@@ -131,7 +131,7 @@ class PrefixComparator{
 __global__ void connect_radix_tree(
      int32_t * parents,
         int2 * children,
-        int2 * ranges,
+        int2 * rightmost_leaf_in_subtree,
     uint64_t * codes,
      int32_t   n) {
 
@@ -188,8 +188,8 @@ __global__ void connect_radix_tree(
 
     parents[left] = tid + n;
     parents[right] = tid + n;
-    ranges[tid + n] = int2{lo, hi};
     children[tid + n] = int2{left, right};
+    rightmost_leaf_in_subtree[tid + n] = int2{k, hi};
 
     if(tid == 0){
       parents[n] = n;
@@ -240,7 +240,6 @@ __global__ void update_tree_aabbs(
 
 }
 
-// not used yet
 template < int dim >
 __global__ void self_traverse(
     int2 * pairs,
@@ -248,8 +247,7 @@ __global__ void self_traverse(
     const fm::AABB<dim> * boxes,
     const uint64_t * code_ids,
     const int2 * children,
-    const int32_t * parents,
-    const int2 * ranges,
+    const int2 * rightmost_leaf_in_subtree,
     uint64_t num_leaves) {
 
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -276,13 +274,14 @@ __global__ void self_traverse(
       int2 c = __ldg(&children[node]);
       int child_left  = c.x;
       int child_right = c.y;
+      
+      int2 rightmost_subtree_leaf = rightmost_leaf_in_subtree[node];
 
-      bool overlap_left  = query_box && __ldg(&boxes[child_left]);
-      bool overlap_right = query_box && __ldg(&boxes[child_right]);
+      bool overlap_left  = intersecting(query_box, __ldg(&boxes[child_left]));
+      bool overlap_right = intersecting(query_box, __ldg(&boxes[child_right]));
 
-      // TODO
-      //if (range.rget(child_left, RIGHT) <= tid) overlap_left = false;
-      //if (range.rget(child_right, RIGHT) <= tid) overlap_right = false;
+      if (rightmost_subtree_leaf.x <= tid) overlap_left = false;
+      if (rightmost_subtree_leaf.y <= tid) overlap_right = false;
 
       // If the query overlaps with a leaf node, report a collision.
       if (overlap_left && (child_left < num_leaves)) {
@@ -418,8 +417,6 @@ void morton_sort(fm::AABB<dim> global, uint64_t * sorted_codes, fm::AABB<dim> * 
   int blocksize = 128; 
   int gridsize = (num_objects + blocksize - 1) / blocksize;
 
-  std::cout << blocksize << " " << gridsize << std::endl;
-
   uint64_t * unsorted_codes;
   cudaMalloc(&unsorted_codes, sizeof(uint64_t) * num_objects);
   morton_kernel<<< gridsize, blocksize >>>(
@@ -452,28 +449,25 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
   num_leaves = h_boxes.size();
 
   // member variables
-  ids.resize(num_leaves);
+  code_ids.resize(num_leaves);
   boxes.resize(2 * num_leaves);
   children.resize(2 * num_leaves);
-  ranges.resize(2 * num_leaves);
+  rightmost_leaf_in_subtree.resize(2 * num_leaves);
 
   // temporary storage 
-  uint64_t * code_ids;
-  cudaMalloc(&code_ids, sizeof(uint64_t) * num_leaves);
-
   fm::AABB<dim> * d_boxes;
   cudaMalloc(&d_boxes, sizeof(fm::AABB<dim>) * num_leaves);
 
   cudaMemcpy(d_boxes, &h_boxes[0], sizeof(fm::AABB<dim>) * num_leaves, cudaMemcpyHostToDevice); 
 
   // calculate the morton codes for each box and sort them by that index
-  morton_sort(global_box, code_ids, thrust::raw_pointer_cast(boxes.data()), d_boxes, num_leaves);
+  morton_sort(global_box, thrust::raw_pointer_cast(code_ids.data()), thrust::raw_pointer_cast(boxes.data()), d_boxes, num_leaves);
 
   int * parents;
   cudaMalloc(&parents, sizeof(int) * (2 * num_leaves));
 
-  int * ready;
-  cudaMalloc(&ready, sizeof(int) * (2 * num_leaves));
+  int * visited;
+  cudaMalloc(&visited, sizeof(int) * (2 * num_leaves));
 
   uint64_t mask = (uint64_t(1) << bits_needed(num_leaves)) - 1;
 
@@ -485,8 +479,8 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
     connect_radix_tree<<< gridsize, blocksize >>>(
         parents, 
         thrust::raw_pointer_cast(children.data()), 
-        thrust::raw_pointer_cast(ranges.data()), 
-        code_ids, 
+        thrust::raw_pointer_cast(rightmost_leaf_in_subtree.data()), 
+        thrust::raw_pointer_cast(code_ids.data()), 
         num_leaves);
   }
 
@@ -495,19 +489,18 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
     int blocksize = 128; 
     int gridsize = (num_leaves + blocksize - 2) / blocksize;
 
-    cudaMemset(ready, 0, sizeof(int) * 2 * num_leaves);
+    cudaMemset(visited, 0, sizeof(int) * 2 * num_leaves);
     update_tree_aabbs<<< gridsize, blocksize >>>(
         thrust::raw_pointer_cast(boxes.data()),
-        ready,
+        visited,
         parents,
         thrust::raw_pointer_cast(children.data()),
         num_leaves);
   }
 
-  cudaFree(code_ids);
   cudaFree(d_boxes);
   cudaFree(parents);
-  cudaFree(ready);
+  cudaFree(visited);
 
 }
 
@@ -517,9 +510,29 @@ template BVH< 3 >::BVH(const std::vector < fm::AABB<3> > &, fm::AABB<3>);
 template < int dim >
 void find_intersections(const BVH<dim> & bvh, int2 * intersecting_pairs, int max_pairs, int & pairs_found) {
 
+  int blocksize = 256;
+  int gridsize = (bvh.num_leaves + blocksize - 1) / blocksize;
 
+  int * num_pairs;
+  cudaMalloc(&num_pairs, sizeof(int));
+  cudaMemset(num_pairs, 0, sizeof(int));
+
+  self_traverse<<<gridsize, blocksize>>>(intersecting_pairs, 
+                                         num_pairs, 
+                                         thrust::raw_pointer_cast(bvh.boxes.data()),
+                                         thrust::raw_pointer_cast(bvh.code_ids.data()),
+                                         thrust::raw_pointer_cast(bvh.children.data()),
+                                         thrust::raw_pointer_cast(bvh.rightmost_leaf_in_subtree.data()),
+                                         bvh.num_leaves);
+
+  cudaMemcpy(&pairs_found, num_pairs, sizeof(int), cudaMemcpyDeviceToHost);
+
+  cudaFree(num_pairs);
 
 }
+
+template void find_intersections(const BVH<2> &, int2 *, int, int &);
+template void find_intersections(const BVH<3> &, int2 *, int, int &);
 
 #if 0
 template < typename T >

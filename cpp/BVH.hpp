@@ -88,10 +88,10 @@ struct BVH {
   AABB_t global;
 
   int32_t num_leaves;
-  thrust::device_vector< int32_t > ids;
+  thrust::device_vector< uint64_t > code_ids;
   thrust::device_vector< AABB_t > boxes;
   thrust::device_vector< int2 > children;
-  thrust::device_vector< int2 > ranges;
+  thrust::device_vector< int2 > rightmost_leaf_in_subtree;
 
   BVH() {}
 
@@ -157,18 +157,19 @@ struct BVH_view {
   using AABB_t = fm::AABB<dim,float>;
 
   int32_t num_leaves;
-  const int32_t * ids;
+  const uint64_t * code_ids;
   const AABB_t * boxes;
   const int2 * children;
   const int2 * ranges;
 
   BVH_view(const BVH<dim> & bvh) {
     num_leaves = bvh.num_leaves;
-    ids = thrust::raw_pointer_cast(bvh.ids.data());
+    code_ids = thrust::raw_pointer_cast(bvh.code_ids.data());
     boxes = thrust::raw_pointer_cast(bvh.boxes.data());
     children = thrust::raw_pointer_cast(bvh.children.data());
   }
 
+#if 0
   // traverse the BVH for intersections with `box` 
   // and invoke `f` when finding a hit with a leaf node
   // note: f will be invoked with the argument of the leaf node
@@ -213,6 +214,7 @@ struct BVH_view {
     } while (n != -1);
 
   }
+#endif
 
 };
 

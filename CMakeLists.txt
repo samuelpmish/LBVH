@@ -34,6 +34,10 @@ if (LBVH_ENABLE_CUDA)
   file(GLOB lbvh_cuda_sources ${PROJECT_SOURCE_DIR}/cpp/*.cu)
   target_sources(libLBVH PRIVATE ${lbvh_cuda_sources})
   target_include_directories(libLBVH PUBLIC ${CUDAToolkit_INCLUDE_DIRS})
+
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(libLBVH PUBLIC "-lineinfo")
+  endif()
 endif()
 
 if (LBVH_ENABLE_PYTHON_BINDINGS)

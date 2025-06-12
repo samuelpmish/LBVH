@@ -47,9 +47,19 @@ void run_test(int n) {
   }
 
   GPU::BVH<dim> bvh(boxes, global_box);
-  thrust::device_vector< std::array<int, 2> > pairs2(pairs1.size());
 
-  find_intersections(bvh, pairs2);
+  int max_pairs = 1000000;
+
+  int2 * pairs2;
+  cudaMalloc(&pairs2, sizeof(int2) * max_pairs);
+
+  int pairs_found = 0;
+  find_intersections(bvh, pairs2, max_pairs, pairs_found);
+
+  cudaFree(pairs2);
+
+  std::cout << pairs_found << " " << pairs1.size() << std::endl;
+
 
   //EXPECT_EQ(pairs1.size(), pairs2.size());
 
