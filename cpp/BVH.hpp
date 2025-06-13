@@ -151,6 +151,9 @@ template < int dim >
 void find_intersections(const BVH<dim> & bvh, int2 * intersecting_pairs, int max_pairs, int & pairs_found);
 
 template < int dim >
+void find_intersections(const BVH<dim> & bvh, const fm::AABB<dim> * query_boxes, int num_query_boxes, int2 * intersecting_pairs, int max_pairs, int & pairs_found);
+
+template < int dim >
 struct BVH_view {
 
   using code_t = uint64_t;

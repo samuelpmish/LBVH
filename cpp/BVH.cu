@@ -288,7 +288,12 @@ __global__ void self_traverse(
 
         int pair_id = atomicAdd(num_pairs, 1);
         int child_left_id = code_ids[child_left] & mask;
-        pairs[pair_id] = int2{child_left_id, query_id};
+
+        if (query_id < child_left_id) {
+          pairs[pair_id] = int2{query_id, child_left_id};
+        } else {
+          pairs[pair_id] = int2{child_left_id, query_id};
+        }
 
       }
 
@@ -296,7 +301,12 @@ __global__ void self_traverse(
 
         int pair_id = atomicAdd(num_pairs, 1);
         int child_right_id = code_ids[child_right] & mask;
-        pairs[pair_id] = int2{child_right_id, query_id};
+
+        if (query_id < child_right_id) {
+          pairs[pair_id] = int2{query_id, child_right_id};
+        } else {
+          pairs[pair_id] = int2{child_right_id, query_id};
+        }
 
       }
 
@@ -325,14 +335,11 @@ __global__ void traverse(
     int2 * pairs,
     int * num_pairs, 
     const fm::AABB<dim> * query_boxes,
-    const uint64_t * query_code_ids,
     const fm::AABB<dim> * bvh_boxes,
     const uint64_t * bvh_code_ids,
     const int2 * bvh_children,
-    const int32_t * bvh_parents,
     uint64_t num_leaves,
-    uint64_t num_queries,
-    bool flipped) {
+    uint64_t num_queries) {
 
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -341,7 +348,6 @@ __global__ void traverse(
 
   if (tid < num_queries) {
 
-    int32_t query_id = query_code_ids[tid] & query_mask;
     fm::AABB<dim> query_box = __ldg(&query_boxes[tid]);
   
     // Allocate traversal stack from thread-local memory,
@@ -359,20 +365,15 @@ __global__ void traverse(
       int child_left  = c.x;
       int child_right = c.y;
 
-      bool overlap_left  = __ldg(&bvh_boxes[child_left])  && query_box;
-      bool overlap_right = __ldg(&bvh_boxes[child_right]) && query_box;
+      bool overlap_left  = intersecting(__ldg(&bvh_boxes[child_left]), query_box);
+      bool overlap_right = intersecting(__ldg(&bvh_boxes[child_right]), query_box);
 
       // If the query overlaps with a leaf node, report a collision.
       if (overlap_left && (child_left < num_leaves)) {
 
         int pair_id = atomicAdd(num_pairs, 1);
         int child_left_id = __ldg(&bvh_code_ids[child_left]) & bvh_mask;
-
-        if (flipped) {
-          pairs[pair_id] = int2{query_id, child_left_id};
-        } else {
-          pairs[pair_id] = int2{child_left_id, query_id};
-        }
+        pairs[pair_id] = int2{child_left_id, tid};
 
       }
 
@@ -380,12 +381,7 @@ __global__ void traverse(
 
         int pair_id = atomicAdd(num_pairs, 1);
         int child_right_id = __ldg(&bvh_code_ids[child_right]) & bvh_mask;
-
-        if (flipped) {
-          pairs[pair_id] = int2{query_id, child_right_id};
-        } else {
-          pairs[pair_id] = int2{child_right_id, query_id};
-        }
+        pairs[pair_id] = int2{child_right_id, tid};
 
       }
 
@@ -533,6 +529,35 @@ void find_intersections(const BVH<dim> & bvh, int2 * intersecting_pairs, int max
 
 template void find_intersections(const BVH<2> &, int2 *, int, int &);
 template void find_intersections(const BVH<3> &, int2 *, int, int &);
+
+template < int dim >
+void find_intersections(const BVH<dim> & bvh, const fm::AABB<dim> * query_boxes, int num_query_boxes, int2 * intersecting_pairs, int max_pairs, int & pairs_found) {
+
+  int blocksize = 256;
+  int gridsize = (num_query_boxes + blocksize - 1) / blocksize;
+
+  int * num_pairs;
+  cudaMalloc(&num_pairs, sizeof(int));
+  cudaMemset(num_pairs, 0, sizeof(int));
+
+  traverse<<<gridsize, blocksize>>>(intersecting_pairs, 
+                                    num_pairs, 
+                                    query_boxes,
+                                    thrust::raw_pointer_cast(bvh.boxes.data()),
+                                    thrust::raw_pointer_cast(bvh.code_ids.data()),
+                                    thrust::raw_pointer_cast(bvh.children.data()),
+                                    bvh.num_leaves,
+                                    num_query_boxes);
+
+  cudaMemcpy(&pairs_found, num_pairs, sizeof(int), cudaMemcpyDeviceToHost);
+
+  cudaFree(num_pairs);
+
+}
+
+template void find_intersections(const BVH<2> &, const fm::AABB<2> *, int, int2 *, int, int &);
+template void find_intersections(const BVH<3> &, const fm::AABB<3> *, int, int2 *, int, int &);
+
 
 #if 0
 template < typename T >
