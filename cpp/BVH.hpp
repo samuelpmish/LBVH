@@ -93,6 +93,12 @@ struct BVH {
   thrust::device_vector< int2 > children;
   thrust::device_vector< int2 > rightmost_leaf_in_subtree;
 
+  float time_morton_code;
+  float time_sort;
+  float time_permute;
+  float time_tree_connectivity;
+  float time_tree_bounding_boxes; 
+
   BVH() {}
 
   BVH(const std::vector< AABB_t > &, AABB_t global);

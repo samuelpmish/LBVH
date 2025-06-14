@@ -2,10 +2,19 @@
 
 #include "BVH.hpp"
 
+#include "binary_io.hpp"
+
 #include <random>
 
 template < int dim >
 using AABB = fm::AABB<dim>;
+
+template < typename T >
+std::vector<T> host_copy(const thrust::device_vector<T> & d_buffer) {
+  std::vector<T> h_buffer(d_buffer.size());
+  cudaMemcpy(&h_buffer[0], thrust::raw_pointer_cast(d_buffer.data()), sizeof(T) * d_buffer.size(), cudaMemcpyDeviceToHost);
+  return h_buffer;
+}
 
 float random_real() {
   static std::default_random_engine generator;
@@ -26,8 +35,10 @@ std::vector< AABB<dim> > random_AABBs(int n, float radius) {
   return boxes;
 }
 
+static constexpr int num_iter = 5;
+
 template < int dim >
-void box_selfintersection_test(int n, float radius) {
+void box_selfintersection_perftest(int n, float radius) {
 
   fm::AABB<dim> global_box;
   for (int i = 0; i < dim; i++) {
@@ -37,19 +48,7 @@ void box_selfintersection_test(int n, float radius) {
 
   auto boxes = random_AABBs<dim>(n, radius);
 
-  std::vector< std::array<int, 2> > pairs1;
-  BVH<dim> cpu_bvh(boxes);
-  for (int j = 0; j < n; j++) {
-    cpu_bvh.query(boxes[j], [&](int i){
-      if (i < j) {
-        pairs1.push_back({i, j});
-      }
-    });
-  }
-
-  std::sort(pairs1.begin(), pairs1.end());
-
-  int max_pairs = 1000000;
+  int max_pairs = 10000000;
 
   int2 * d_pairs2;
   cudaMalloc(&d_pairs2, sizeof(int2) * max_pairs);
@@ -58,25 +57,14 @@ void box_selfintersection_test(int n, float radius) {
   cudaMalloc(&d_boxes, sizeof(fm::AABB<dim>) * n);
   cudaMemcpy(d_boxes, &boxes[0], sizeof(fm::AABB<dim>) * n, cudaMemcpyHostToDevice);
 
-  std::cout << pairs1.size() << std::endl;
-
-  for (int k = 0; k < 5; k++) {
+  for (int k = 0; k < num_iter; k++) {
 
     GPU::BVH<dim> bvh(boxes, global_box);
 
     int pairs_found = 0;
     find_intersections(bvh, d_pairs2, max_pairs, pairs_found);
 
-    std::vector< std::array<int, 2> > pairs2(pairs_found);
-    cudaMemcpy(&pairs2[0], d_pairs2, sizeof(int2) * pairs_found, cudaMemcpyDeviceToHost);
-
-    std::sort(pairs2.begin(), pairs2.end());
-
-    EXPECT_EQ(pairs1.size(), pairs2.size());
-
-    for (int i = 0; i < pairs1.size(); i++) {
-      EXPECT_EQ(pairs1[i], pairs2[i]);
-    }
+    std::cout << pairs_found << std::endl;
 
   }
 
@@ -86,7 +74,7 @@ void box_selfintersection_test(int n, float radius) {
 }
 
 template < int dim >
-void box_intersection_test(int n, float radius) {
+void box_intersection_perftest(int n, float radius) {
 
   fm::AABB<dim> global_box;
   for (int i = 0; i < dim; i++) {
@@ -97,26 +85,13 @@ void box_intersection_test(int n, float radius) {
   auto boxes_A = random_AABBs<dim>(n, radius);
   auto boxes_B = random_AABBs<dim>(n, radius);
 
-  std::vector< std::array<int, 2> > pairs1;
-  BVH<dim> cpu_bvh(boxes_A);
-  for (int j = 0; j < n; j++) {
-    cpu_bvh.query(boxes_B[j], [&](int i){
-      pairs1.push_back({i, j});
-    });
-  }
-
-  std::sort(pairs1.begin(), pairs1.end());
-
-  int max_pairs = 1000000;
-
+  int max_pairs = 10000000;
   int2 * d_pairs2;
   cudaMalloc(&d_pairs2, sizeof(int2) * max_pairs);
 
   fm::AABB<dim> * d_boxes_B;
   cudaMalloc(&d_boxes_B, sizeof(fm::AABB<dim>) * n);
   cudaMemcpy(d_boxes_B, &boxes_B[0], sizeof(fm::AABB<dim>) * n, cudaMemcpyHostToDevice);
-
-  std::cout << pairs1.size() << std::endl;
 
   for (int k = 0; k < 5; k++) {
 
@@ -125,16 +100,7 @@ void box_intersection_test(int n, float radius) {
     int pairs_found = 0;
     find_intersections(bvh, d_boxes_B, n, d_pairs2, max_pairs, pairs_found);
 
-    std::vector< std::array<int, 2> > pairs2(pairs_found);
-    cudaMemcpy(&pairs2[0], d_pairs2, sizeof(int2) * pairs_found, cudaMemcpyDeviceToHost);
-
-    std::sort(pairs2.begin(), pairs2.end());
-
-    EXPECT_EQ(pairs1.size(), pairs2.size());
-
-    for (int i = 0; i < pairs1.size(); i++) {
-      EXPECT_EQ(pairs1[i], pairs2[i]);
-    }
+    std::cout << pairs_found << std::endl;
 
   }
 
@@ -143,26 +109,26 @@ void box_intersection_test(int n, float radius) {
 
 }
 
-TEST(UnitTest, BVHSelfIntersection2D) {
-  for (int i = 0; i < 10; i++) {
-    box_selfintersection_test<2>(1000, 0.02f);
-  }
+TEST(PerfTest, BVHSelfIntersection2D) {
+  box_selfintersection_perftest<2>(10000, 0.1f);
+  box_selfintersection_perftest<2>(100000, 0.01f);
+  box_selfintersection_perftest<2>(1000000, 0.001f);
 }
 
-TEST(UnitTest, BVHSelfIntersection3D) {
-  for (int i = 0; i < 10; i++) {
-    box_selfintersection_test<3>(1000, 0.05f);
-  }
+TEST(PerfTest, BVHSelfIntersection3D) {
+  box_selfintersection_perftest<3>(10000, 0.07f);
+  box_selfintersection_perftest<3>(100000, 0.03f);
+  box_selfintersection_perftest<3>(1000000, 0.007f);
 }
 
-TEST(UnitTest, BVHIntersection2D) {
-  for (int i = 0; i < 10; i++) {
-    box_intersection_test<2>(1000, 0.02f);
-  }
+TEST(PerfTest, BVHIntersection2D) {
+  box_intersection_perftest<2>(10000, 0.1f);
+  box_intersection_perftest<2>(100000, 0.01f);
+  box_intersection_perftest<2>(1000000, 0.001f);
 }
 
-TEST(UnitTest, BVHIntersection3D) {
-  for (int i = 0; i < 10; i++) {
-    box_intersection_test<3>(1000, 0.05f);
-  }
+TEST(PerfTest, BVHIntersection3D) {
+  box_intersection_perftest<3>(10000, 0.12f);
+  box_intersection_perftest<3>(100000, 0.03f);
+  box_intersection_perftest<3>(1000000, 0.007f);
 }

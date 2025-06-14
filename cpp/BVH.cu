@@ -2,6 +2,8 @@
 #include "morton.h"
 #include "bit_packing.h"
 
+#include "CHK_CUDA.h"
+
 #include "timer.h"
 
 #include "cuda.h"
@@ -9,6 +11,29 @@
 #include "util.cuh"
 #include "trove/ptr.h"
 #include "generics/ldg.h"
+
+//__device__ __inline__ fm::AABB<2> loadAABB_uncached(const fm::AABB<2> * ptr)
+//{
+//    fm::AABB<2> aabb;
+//    asm("ld.global.cg.v4.f32 {%0, %1, %2, %3}, [%4];" : "=f"(aabb.min[0]), "=f"(aabb.min[1]), "=f"(aabb.max[0]), "=f"(aabb.max[1]) : "r"(&ptr->min[0]));
+//    return aabb;
+//}
+
+//__device__ __inline__ fm::AABB<2> loadAABB_uncached(const fm::AABB<2> * ptr)
+//{
+//    fm::AABB<2> aabb;
+//    asm("ld.global.cg.v4.f32 {%0, %1, %2, %3}, [%4];" : "=f"(aabb.x[0]), "=f"(aabb.x[1]), "=f"(aabb.y[0]), "=f"(aabb.y[1]) : "r"(&ptr->x));
+//    asm("ld.global.cg.v2.f32 {%0, %1}, [%2];" : "=f"(aabb.z[0]), "=f"(aabb.z[1]) : "r"(&ptr->z));
+//    return aabb;
+//}
+
+//------------------------------------------------------------------------
+
+//__device__ __inline__ void storeAABB_uncached(AABB* ptr, const AABB& aabb)
+//{
+//    asm("st.global.cg.v4.f32 [%0], {%1, %2, %3, %4};" :: "r"(&ptr->x), "f"(aabb.x[0]), "f"(aabb.x[1]), "f"(aabb.y[0]), "f"(aabb.y[1]));
+//    asm("st.global.cg.v2.f32 [%0], {%1, %2};" :: "r"(&ptr->z), "f"(aabb.z[0]), "f"(aabb.z[1]));
+//}
 
 __global__ void morton_kernel(
   uint64_t * code_ids,
@@ -96,13 +121,11 @@ __global__ void permute_objects(
 
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-  trove::coalesced_ptr < T > trove_objects(permuted_objects);
-
   uint64_t mask = (uint64_t(1) << bits_needed_d(num_objects)) - 1;
 
   if (tid < num_objects) {
     uint64_t id = codes[tid] & mask;
-    trove_objects[tid] = __ldg(&unsorted_objects[id]);
+    permuted_objects[tid] = unsorted_objects[id];
   }
 
 }
@@ -199,6 +222,20 @@ __global__ void connect_radix_tree(
 }
 
 template < int dim >
+__global__ void print_trace( fm::AABB<dim> * boxes, const int32_t * parents, int * visited, const int32_t n) {
+
+  int id = 0;
+  fm::AABB<dim> box = boxes[id];
+  printf("%d: %f, %f, %f, %f\n", id, box.min[0], box.max[0], box.min[1], box.max[1]);
+  while (id != n) {
+    id = parents[id];
+    box = boxes[id];
+    printf("%d: %f, %f, %f, %f\n", id, box.min[0], box.max[0], box.min[1], box.max[1]);
+  };
+
+}
+
+template < int dim >
 __global__ void update_tree_aabbs(
     fm::AABB<dim> * boxes,
     int * visited,
@@ -225,7 +262,11 @@ __global__ void update_tree_aabbs(
       int2 c = children[parent];
       int sibling = (tid == c.x) ? c.y : c.x;
 
-      fm::AABB<dim> sibling_bv = trove_boxes[sibling];
+      // Ensure write is visible before next iteration
+      __threadfence();
+
+      //fm::AABB<dim> sibling_bv = trove_boxes[sibling];
+      fm::AABB<dim> sibling_bv = boxes[sibling];
 
       bv = union_of(bv, sibling_bv);
 
@@ -233,6 +274,9 @@ __global__ void update_tree_aabbs(
       parent = parents[tid];
 
       boxes[tid] = bv;
+
+      // Ensure write is visible before next iteration
+      __threadfence();
 
     }
 
@@ -344,7 +388,6 @@ __global__ void traverse(
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
 
   uint64_t bvh_mask = (uint64_t(1) << bits_needed_d(num_leaves)) - 1;
-  uint64_t query_mask = (uint64_t(1) << bits_needed_d(num_queries)) - 1;
 
   if (tid < num_queries) {
 
@@ -408,38 +451,10 @@ __global__ void traverse(
 namespace GPU {
 
 template < int dim >
-void morton_sort(fm::AABB<dim> global, uint64_t * sorted_codes, fm::AABB<dim> * sorted_objects, const fm::AABB<dim> * unsorted_objects, int num_objects) {
-
-  int blocksize = 128; 
-  int gridsize = (num_objects + blocksize - 1) / blocksize;
-
-  uint64_t * unsorted_codes;
-  cudaMalloc(&unsorted_codes, sizeof(uint64_t) * num_objects);
-  morton_kernel<<< gridsize, blocksize >>>(
-      unsorted_codes, 
-      global, 
-      unsorted_objects, 
-      num_objects);
-
-  void * sort_buffer = NULL;
-  size_t bytes = 0;
-
-  // first invocation returns the number of bytes needed
-  util::sort(sort_buffer, bytes, unsorted_codes, sorted_codes, num_objects);
-  cudaMalloc(&sort_buffer, bytes);
-
-  // sceond invocation actually performs the sort
-  util::sort(sort_buffer, bytes, unsorted_codes, sorted_codes, num_objects);
-
-  permute_objects<<< gridsize, blocksize >>>(sorted_objects, unsorted_objects, sorted_codes, num_objects);
-
-  cudaFree(sort_buffer);
-  cudaFree(unsorted_codes);
-
-}
-
-template < int dim >
 BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global_box) {
+
+  std::vector< cudaEvent_t > events(6);
+  for (auto & e : events) { cudaEventCreate(&e); }
 
   global = global_box;
   num_leaves = h_boxes.size();
@@ -457,13 +472,41 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
   cudaMemcpy(d_boxes, &h_boxes[0], sizeof(fm::AABB<dim>) * num_leaves, cudaMemcpyHostToDevice); 
 
   // calculate the morton codes for each box and sort them by that index
-  morton_sort(global_box, thrust::raw_pointer_cast(code_ids.data()), thrust::raw_pointer_cast(boxes.data()), d_boxes, num_leaves);
+  cudaEventRecord(events[0]);
+  {
+    int blocksize = 128; 
+    int gridsize = (num_leaves + blocksize - 1) / blocksize;
+
+    uint64_t * unsorted_codes;
+    cudaMalloc(&unsorted_codes, sizeof(uint64_t) * num_leaves);
+    morton_kernel<<< gridsize, blocksize >>>(unsorted_codes, global, d_boxes, num_leaves);
+
+    // first invocation returns the number of bytes needed
+    size_t bytes = 0;
+    void * sort_buffer = NULL;
+    util::sort(sort_buffer, bytes, unsorted_codes, thrust::raw_pointer_cast(code_ids.data()), num_leaves);
+    cudaMalloc(&sort_buffer, bytes);
+
+    // second invocation actually performs the sort
+    util::sort(sort_buffer, bytes, unsorted_codes, thrust::raw_pointer_cast(code_ids.data()), num_leaves);
+
+    permute_objects<<< gridsize, blocksize >>>(
+      thrust::raw_pointer_cast(boxes.data()), 
+      d_boxes,
+      thrust::raw_pointer_cast(code_ids.data()), 
+      num_leaves
+    );
+
+    cudaFree(sort_buffer);
+    cudaFree(unsorted_codes);
+  }
+  cudaEventRecord(events[1]);
 
   int * parents;
-  cudaMalloc(&parents, sizeof(int) * (2 * num_leaves));
+  CHK_CUDA(cudaMalloc(&parents, sizeof(int) * (2 * num_leaves)));
 
   int * visited;
-  cudaMalloc(&visited, sizeof(int) * (2 * num_leaves));
+  CHK_CUDA(cudaMalloc(&visited, sizeof(int) * (2 * num_leaves)));
 
   uint64_t mask = (uint64_t(1) << bits_needed(num_leaves)) - 1;
 
@@ -472,12 +515,14 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
     int blocksize = 128; 
     int gridsize = (num_leaves + blocksize - 2) / blocksize;
 
+    cudaEventRecord(events[3]);
     connect_radix_tree<<< gridsize, blocksize >>>(
         parents, 
         thrust::raw_pointer_cast(children.data()), 
         thrust::raw_pointer_cast(rightmost_leaf_in_subtree.data()), 
         thrust::raw_pointer_cast(code_ids.data()), 
         num_leaves);
+    cudaEventRecord(events[4]);
   }
 
   // assign tight bounding boxes around the internal nodes of the BVH
@@ -485,6 +530,7 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
     int blocksize = 128; 
     int gridsize = (num_leaves + blocksize - 2) / blocksize;
 
+    cudaEventRecord(events[5]);
     cudaMemset(visited, 0, sizeof(int) * 2 * num_leaves);
     update_tree_aabbs<<< gridsize, blocksize >>>(
         thrust::raw_pointer_cast(boxes.data()),
@@ -492,11 +538,14 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
         parents,
         thrust::raw_pointer_cast(children.data()),
         num_leaves);
+    cudaEventRecord(events[5]);
   }
 
-  cudaFree(d_boxes);
-  cudaFree(parents);
-  cudaFree(visited);
+  for (auto & e : events) { cudaEventDestroy(e); }
+
+  CHK_CUDA(cudaFree(d_boxes));
+  CHK_CUDA(cudaFree(parents));
+  CHK_CUDA(cudaFree(visited));
 
 }
 
@@ -548,7 +597,7 @@ void find_intersections(const BVH<dim> & bvh, const fm::AABB<dim> * query_boxes,
                                     thrust::raw_pointer_cast(bvh.children.data()),
                                     bvh.num_leaves,
                                     num_query_boxes);
-
+                                  
   cudaMemcpy(&pairs_found, num_pairs, sizeof(int), cudaMemcpyDeviceToHost);
 
   cudaFree(num_pairs);
