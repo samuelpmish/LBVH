@@ -49,27 +49,28 @@ void box_selfintersection_perftest(int n, float radius) {
   auto boxes = random_AABBs<dim>(n, radius);
 
   int max_pairs = 10000000;
-
-  int2 * d_pairs2;
-  cudaMalloc(&d_pairs2, sizeof(int2) * max_pairs);
-
-  fm::AABB<dim> * d_boxes;
-  cudaMalloc(&d_boxes, sizeof(fm::AABB<dim>) * n);
-  cudaMemcpy(d_boxes, &boxes[0], sizeof(fm::AABB<dim>) * n, cudaMemcpyHostToDevice);
+  GPU::intersection_list intersections(max_pairs);
 
   for (int k = 0; k < num_iter; k++) {
 
     GPU::BVH<dim> bvh(boxes, global_box);
 
-    int pairs_found = 0;
-    find_intersections(bvh, d_pairs2, max_pairs, pairs_found);
+    find_intersections(intersections, bvh);
 
-    std::cout << pairs_found << std::endl;
+    std::cout << intersections.pairs_found << std::endl;
+
+    std::cout << bvh.time_ms_morton_code << " ";
+    std::cout << bvh.time_ms_sort << " ";
+    std::cout << bvh.time_ms_permute << " ";
+    std::cout << bvh.time_ms_tree_connectivity << " ";
+    std::cout << bvh.time_ms_tree_bounding_boxes << " ";
+    std::cout << intersections.time_ms_sort << " ";
+    std::cout << intersections.time_ms_permute << " ";
+    std::cout << intersections.time_ms_traverse;
+
+    std::cout << std::endl;
 
   }
-
-  cudaFree(d_pairs2);
-  cudaFree(d_boxes);
 
 }
 
@@ -85,26 +86,34 @@ void box_intersection_perftest(int n, float radius) {
   auto boxes_A = random_AABBs<dim>(n, radius);
   auto boxes_B = random_AABBs<dim>(n, radius);
 
-  int max_pairs = 10000000;
-  int2 * d_pairs2;
-  cudaMalloc(&d_pairs2, sizeof(int2) * max_pairs);
-
   fm::AABB<dim> * d_boxes_B;
   cudaMalloc(&d_boxes_B, sizeof(fm::AABB<dim>) * n);
   cudaMemcpy(d_boxes_B, &boxes_B[0], sizeof(fm::AABB<dim>) * n, cudaMemcpyHostToDevice);
+
+  int max_pairs = 10000000;
+  GPU::intersection_list intersections(max_pairs);
 
   for (int k = 0; k < 5; k++) {
 
     GPU::BVH<dim> bvh(boxes_A, global_box);
 
-    int pairs_found = 0;
-    find_intersections(bvh, d_boxes_B, n, d_pairs2, max_pairs, pairs_found);
+    find_intersections(intersections, bvh, d_boxes_B, n);
 
-    std::cout << pairs_found << std::endl;
+    std::cout << intersections.pairs_found << std::endl;
+
+    std::cout << bvh.time_ms_morton_code << " ";
+    std::cout << bvh.time_ms_sort << " ";
+    std::cout << bvh.time_ms_permute << " ";
+    std::cout << bvh.time_ms_tree_connectivity << " ";
+    std::cout << bvh.time_ms_tree_bounding_boxes << " ";
+    std::cout << intersections.time_ms_sort << " ";
+    std::cout << intersections.time_ms_permute << " ";
+    std::cout << intersections.time_ms_traverse;
+
+    std::cout << std::endl;
 
   }
 
-  cudaFree(d_pairs2);
   cudaFree(d_boxes_B);
 
 }

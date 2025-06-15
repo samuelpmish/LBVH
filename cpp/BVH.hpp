@@ -79,6 +79,18 @@ struct BVH {
 
 namespace GPU {
 
+struct intersection_list {
+  thrust::device_vector<int2> pairs;
+
+  int pairs_found;
+
+  float time_ms_sort;
+  float time_ms_permute;
+  float time_ms_traverse;
+
+  intersection_list(int max_pairs);
+};
+
 template < int dim >
 struct BVH {
 
@@ -93,11 +105,11 @@ struct BVH {
   thrust::device_vector< int2 > children;
   thrust::device_vector< int2 > rightmost_leaf_in_subtree;
 
-  float time_morton_code;
-  float time_sort;
-  float time_permute;
-  float time_tree_connectivity;
-  float time_tree_bounding_boxes; 
+  float time_ms_morton_code;
+  float time_ms_sort;
+  float time_ms_permute;
+  float time_ms_tree_connectivity;
+  float time_ms_tree_bounding_boxes; 
 
   BVH() {}
 
@@ -154,10 +166,10 @@ struct BVH {
 
 // note: intersecting_pairs is a pointer to device memory
 template < int dim >
-void find_intersections(const BVH<dim> & bvh, int2 * intersecting_pairs, int max_pairs, int & pairs_found);
+void find_intersections(intersection_list & intersections, const BVH<dim> & bvh);
 
 template < int dim >
-void find_intersections(const BVH<dim> & bvh, const fm::AABB<dim> * query_boxes, int num_query_boxes, int2 * intersecting_pairs, int max_pairs, int & pairs_found);
+void find_intersections(intersection_list & intersections, const BVH<dim> & bvh, const fm::AABB<dim> * query_boxes, int num_query_boxes);
 
 template < int dim >
 struct BVH_view {
@@ -228,5 +240,4 @@ struct BVH_view {
 };
 
 }
-
 #endif

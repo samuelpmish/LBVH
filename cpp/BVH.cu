@@ -35,6 +35,7 @@
 //    asm("st.global.cg.v2.f32 [%0], {%1, %2};" :: "r"(&ptr->z), "f"(aabb.z[0]), "f"(aabb.z[1]));
 //}
 
+
 __global__ void morton_kernel(
   uint64_t * code_ids,
   const fm::AABB<2> global,
@@ -450,10 +451,14 @@ __global__ void traverse(
 
 namespace GPU {
 
+intersection_list::intersection_list(int max_pairs) : pairs(max_pairs) {
+  pairs_found = 0;
+}
+
 template < int dim >
 BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global_box) {
 
-  std::vector< cudaEvent_t > events(6);
+  std::vector< cudaEvent_t > events(9);
   for (auto & e : events) { cudaEventCreate(&e); }
 
   global = global_box;
@@ -472,14 +477,15 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
   cudaMemcpy(d_boxes, &h_boxes[0], sizeof(fm::AABB<dim>) * num_leaves, cudaMemcpyHostToDevice); 
 
   // calculate the morton codes for each box and sort them by that index
-  cudaEventRecord(events[0]);
   {
     int blocksize = 128; 
     int gridsize = (num_leaves + blocksize - 1) / blocksize;
 
     uint64_t * unsorted_codes;
     cudaMalloc(&unsorted_codes, sizeof(uint64_t) * num_leaves);
+    cudaEventRecord(events[0]);
     morton_kernel<<< gridsize, blocksize >>>(unsorted_codes, global, d_boxes, num_leaves);
+    cudaEventRecord(events[1]);
 
     // first invocation returns the number of bytes needed
     size_t bytes = 0;
@@ -488,7 +494,9 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
     cudaMalloc(&sort_buffer, bytes);
 
     // second invocation actually performs the sort
+    cudaEventRecord(events[2]);
     util::sort(sort_buffer, bytes, unsorted_codes, thrust::raw_pointer_cast(code_ids.data()), num_leaves);
+    cudaEventRecord(events[3]);
 
     permute_objects<<< gridsize, blocksize >>>(
       thrust::raw_pointer_cast(boxes.data()), 
@@ -496,11 +504,11 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
       thrust::raw_pointer_cast(code_ids.data()), 
       num_leaves
     );
+    cudaEventRecord(events[4]);
 
     cudaFree(sort_buffer);
     cudaFree(unsorted_codes);
   }
-  cudaEventRecord(events[1]);
 
   int * parents;
   CHK_CUDA(cudaMalloc(&parents, sizeof(int) * (2 * num_leaves)));
@@ -515,14 +523,14 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
     int blocksize = 128; 
     int gridsize = (num_leaves + blocksize - 2) / blocksize;
 
-    cudaEventRecord(events[3]);
+    cudaEventRecord(events[5]);
     connect_radix_tree<<< gridsize, blocksize >>>(
         parents, 
         thrust::raw_pointer_cast(children.data()), 
         thrust::raw_pointer_cast(rightmost_leaf_in_subtree.data()), 
         thrust::raw_pointer_cast(code_ids.data()), 
         num_leaves);
-    cudaEventRecord(events[4]);
+    cudaEventRecord(events[6]);
   }
 
   // assign tight bounding boxes around the internal nodes of the BVH
@@ -530,7 +538,7 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
     int blocksize = 128; 
     int gridsize = (num_leaves + blocksize - 2) / blocksize;
 
-    cudaEventRecord(events[5]);
+    cudaEventRecord(events[7]);
     cudaMemset(visited, 0, sizeof(int) * 2 * num_leaves);
     update_tree_aabbs<<< gridsize, blocksize >>>(
         thrust::raw_pointer_cast(boxes.data()),
@@ -538,8 +546,15 @@ BVH<dim>::BVH(const std::vector< fm::AABB<dim> > & h_boxes, fm::AABB<dim> global
         parents,
         thrust::raw_pointer_cast(children.data()),
         num_leaves);
-    cudaEventRecord(events[5]);
+    cudaEventRecord(events[8]);
   }
+
+  cudaDeviceSynchronize();
+  cudaEventElapsedTime(&time_ms_morton_code, events[0], events[1]); 
+  cudaEventElapsedTime(&time_ms_sort, events[2], events[3]); 
+  cudaEventElapsedTime(&time_ms_permute, events[3], events[4]); 
+  cudaEventElapsedTime(&time_ms_tree_connectivity, events[5], events[6]); 
+  cudaEventElapsedTime(&time_ms_tree_bounding_boxes, events[7], events[8]); 
 
   for (auto & e : events) { cudaEventDestroy(e); }
 
@@ -553,7 +568,10 @@ template BVH< 2 >::BVH(const std::vector < fm::AABB<2> > &, fm::AABB<2>);
 template BVH< 3 >::BVH(const std::vector < fm::AABB<3> > &, fm::AABB<3>);
 
 template < int dim >
-void find_intersections(const BVH<dim> & bvh, int2 * intersecting_pairs, int max_pairs, int & pairs_found) {
+void find_intersections(intersection_list & intersections, const BVH<dim> & bvh) {
+
+  std::vector< cudaEvent_t > events(2);
+  for (auto & e : events) { cudaEventCreate(&e); }
 
   int blocksize = 256;
   int gridsize = (bvh.num_leaves + blocksize - 1) / blocksize;
@@ -562,25 +580,38 @@ void find_intersections(const BVH<dim> & bvh, int2 * intersecting_pairs, int max
   cudaMalloc(&num_pairs, sizeof(int));
   cudaMemset(num_pairs, 0, sizeof(int));
 
-  self_traverse<<<gridsize, blocksize>>>(intersecting_pairs, 
+  int max_pairs = intersections.pairs.size();
+
+  cudaEventRecord(events[0]);
+  self_traverse<<<gridsize, blocksize>>>(thrust::raw_pointer_cast(intersections.pairs.data()), 
                                          num_pairs, 
                                          thrust::raw_pointer_cast(bvh.boxes.data()),
                                          thrust::raw_pointer_cast(bvh.code_ids.data()),
                                          thrust::raw_pointer_cast(bvh.children.data()),
                                          thrust::raw_pointer_cast(bvh.rightmost_leaf_in_subtree.data()),
                                          bvh.num_leaves);
+  cudaEventRecord(events[1]);
 
-  cudaMemcpy(&pairs_found, num_pairs, sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpy(&intersections.pairs_found, num_pairs, sizeof(int), cudaMemcpyDeviceToHost);
+
+  intersections.time_ms_sort = 0.0f;
+  intersections.time_ms_permute = 0.0f;
+  cudaEventElapsedTime(&intersections.time_ms_traverse, events[0], events[1]);
+
+  for (auto & e : events) { cudaEventDestroy(e); }
 
   cudaFree(num_pairs);
 
 }
 
-template void find_intersections(const BVH<2> &, int2 *, int, int &);
-template void find_intersections(const BVH<3> &, int2 *, int, int &);
+template void find_intersections(intersection_list &, const BVH<2> &);
+template void find_intersections(intersection_list &, const BVH<3> &);
 
 template < int dim >
-void find_intersections(const BVH<dim> & bvh, const fm::AABB<dim> * query_boxes, int num_query_boxes, int2 * intersecting_pairs, int max_pairs, int & pairs_found) {
+void find_intersections(intersection_list & intersections, const BVH<dim> & bvh, const fm::AABB<dim> * query_boxes, int num_query_boxes) {
+
+  std::vector< cudaEvent_t > events(2);
+  for (auto & e : events) { cudaEventCreate(&e); }
 
   int blocksize = 256;
   int gridsize = (num_query_boxes + blocksize - 1) / blocksize;
@@ -589,24 +620,33 @@ void find_intersections(const BVH<dim> & bvh, const fm::AABB<dim> * query_boxes,
   cudaMalloc(&num_pairs, sizeof(int));
   cudaMemset(num_pairs, 0, sizeof(int));
 
-  traverse<<<gridsize, blocksize>>>(intersecting_pairs, 
-                                    num_pairs, 
+  int max_pairs = intersections.pairs.size();
+
+  cudaEventRecord(events[0]);
+  traverse<<<gridsize, blocksize>>>(thrust::raw_pointer_cast(intersections.pairs.data()), 
+                                    num_pairs,
                                     query_boxes,
                                     thrust::raw_pointer_cast(bvh.boxes.data()),
                                     thrust::raw_pointer_cast(bvh.code_ids.data()),
                                     thrust::raw_pointer_cast(bvh.children.data()),
                                     bvh.num_leaves,
                                     num_query_boxes);
+  cudaEventRecord(events[1]);
                                   
-  cudaMemcpy(&pairs_found, num_pairs, sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpy(&intersections.pairs_found, num_pairs, sizeof(int), cudaMemcpyDeviceToHost);
+
+  intersections.time_ms_sort = 0.0f;
+  intersections.time_ms_permute = 0.0f;
+  cudaEventElapsedTime(&intersections.time_ms_traverse, events[0], events[1]);
+
+  for (auto & e : events) { cudaEventDestroy(e); }
 
   cudaFree(num_pairs);
 
 }
 
-template void find_intersections(const BVH<2> &, const fm::AABB<2> *, int, int2 *, int, int &);
-template void find_intersections(const BVH<3> &, const fm::AABB<3> *, int, int2 *, int, int &);
-
+template void find_intersections(intersection_list &, const BVH<2> &, const fm::AABB<2> *, int);
+template void find_intersections(intersection_list &, const BVH<3> &, const fm::AABB<3> *, int);
 
 #if 0
 template < typename T >

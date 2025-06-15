@@ -49,39 +49,30 @@ void box_selfintersection_test(int n, float radius) {
 
   std::sort(pairs1.begin(), pairs1.end());
 
-  int max_pairs = 1000000;
-
-  int2 * d_pairs2;
-  cudaMalloc(&d_pairs2, sizeof(int2) * max_pairs);
-
-  fm::AABB<dim> * d_boxes;
-  cudaMalloc(&d_boxes, sizeof(fm::AABB<dim>) * n);
-  cudaMemcpy(d_boxes, &boxes[0], sizeof(fm::AABB<dim>) * n, cudaMemcpyHostToDevice);
-
   std::cout << pairs1.size() << std::endl;
+
+  int max_pairs = 1000000;
+  GPU::intersection_list intersections(max_pairs);
 
   for (int k = 0; k < 5; k++) {
 
     GPU::BVH<dim> bvh(boxes, global_box);
 
-    int pairs_found = 0;
-    find_intersections(bvh, d_pairs2, max_pairs, pairs_found);
+    find_intersections(intersections, bvh);
 
-    std::vector< std::array<int, 2> > pairs2(pairs_found);
-    cudaMemcpy(&pairs2[0], d_pairs2, sizeof(int2) * pairs_found, cudaMemcpyDeviceToHost);
+    EXPECT_EQ(pairs1.size(), intersections.pairs_found);
+    if (pairs1.size() == intersections.pairs_found && intersections.pairs_found <= max_pairs) {
+      std::vector< std::array<int, 2> > pairs2(intersections.pairs_found);
+      cudaMemcpy(&pairs2[0], thrust::raw_pointer_cast(intersections.pairs.data()), sizeof(int2) * intersections.pairs_found, cudaMemcpyDeviceToHost);
 
-    std::sort(pairs2.begin(), pairs2.end());
+      std::sort(pairs2.begin(), pairs2.end());
 
-    EXPECT_EQ(pairs1.size(), pairs2.size());
-
-    for (int i = 0; i < pairs1.size(); i++) {
-      EXPECT_EQ(pairs1[i], pairs2[i]);
+      for (int i = 0; i < pairs1.size(); i++) {
+        EXPECT_EQ(pairs1[i], pairs2[i]);
+      }
     }
 
   }
-
-  cudaFree(d_pairs2);
-  cudaFree(d_boxes);
 
 }
 
@@ -107,38 +98,35 @@ void box_intersection_test(int n, float radius) {
 
   std::sort(pairs1.begin(), pairs1.end());
 
-  int max_pairs = 1000000;
-
-  int2 * d_pairs2;
-  cudaMalloc(&d_pairs2, sizeof(int2) * max_pairs);
-
   fm::AABB<dim> * d_boxes_B;
   cudaMalloc(&d_boxes_B, sizeof(fm::AABB<dim>) * n);
   cudaMemcpy(d_boxes_B, &boxes_B[0], sizeof(fm::AABB<dim>) * n, cudaMemcpyHostToDevice);
 
   std::cout << pairs1.size() << std::endl;
 
+  int max_pairs = 1000000;
+  GPU::intersection_list intersections(max_pairs);
+
   for (int k = 0; k < 5; k++) {
 
     GPU::BVH<dim> bvh(boxes_A, global_box);
 
-    int pairs_found = 0;
-    find_intersections(bvh, d_boxes_B, n, d_pairs2, max_pairs, pairs_found);
+    find_intersections(intersections, bvh, d_boxes_B, n);
 
-    std::vector< std::array<int, 2> > pairs2(pairs_found);
-    cudaMemcpy(&pairs2[0], d_pairs2, sizeof(int2) * pairs_found, cudaMemcpyDeviceToHost);
+    EXPECT_EQ(pairs1.size(), intersections.pairs_found);
+    if (pairs1.size() == intersections.pairs_found && intersections.pairs_found <= max_pairs) {
+      std::vector< std::array<int, 2> > pairs2(intersections.pairs_found);
+      cudaMemcpy(&pairs2[0], thrust::raw_pointer_cast(intersections.pairs.data()), sizeof(int2) * intersections.pairs_found, cudaMemcpyDeviceToHost);
 
-    std::sort(pairs2.begin(), pairs2.end());
+      std::sort(pairs2.begin(), pairs2.end());
 
-    EXPECT_EQ(pairs1.size(), pairs2.size());
-
-    for (int i = 0; i < pairs1.size(); i++) {
-      EXPECT_EQ(pairs1[i], pairs2[i]);
+      for (int i = 0; i < pairs1.size(); i++) {
+        EXPECT_EQ(pairs1[i], pairs2[i]);
+      }
     }
 
   }
 
-  cudaFree(d_pairs2);
   cudaFree(d_boxes_B);
 
 }
