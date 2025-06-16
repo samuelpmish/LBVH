@@ -25,7 +25,7 @@ if (LBVH_ENABLE_CUDA)
 
     add_executable(gpu_${testname} ${filename})
     target_link_libraries(gpu_${testname} PUBLIC libLBVH GTest::gtest_main)
-
+    target_compile_definitions(gpu_${testname} PUBLIC "-DLBVH_DATA_DIR=\"${PROJECT_SOURCE_DIR}/data\"")
     add_test(gpu_${testname} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${testname})		
 
   endforeach(filename ${cu_tests})

@@ -38,7 +38,7 @@ std::vector< AABB<dim> > random_AABBs(int n, float radius) {
 static constexpr int num_iter = 5;
 
 template < int dim >
-void box_selfintersection_perftest(int n, float radius) {
+void box_selfintersection_perftest(int n, float radius, std::string filename = "") {
 
   fm::AABB<dim> global_box;
   for (int i = 0; i < dim; i++) {
@@ -46,7 +46,13 @@ void box_selfintersection_perftest(int n, float radius) {
     global_box.max[i] = +1.0f;
   }
 
-  auto boxes = random_AABBs<dim>(n, radius);
+  std::vector< fm::AABB<dim> > boxes;
+
+  if (filename.empty()) {
+    boxes = random_AABBs<dim>(n, radius);
+  } else {
+    boxes = read_binary< fm::AABB<dim> >(filename);
+  }
 
   int max_pairs = 10000000;
   GPU::intersection_list intersections(max_pairs);
@@ -75,7 +81,7 @@ void box_selfintersection_perftest(int n, float radius) {
 }
 
 template < int dim >
-void box_intersection_perftest(int n, float radius) {
+void box_intersection_perftest(int n, float radius, std::string filename = "") {
 
   fm::AABB<dim> global_box;
   for (int i = 0; i < dim; i++) {
@@ -83,8 +89,15 @@ void box_intersection_perftest(int n, float radius) {
     global_box.max[i] = +1.0f;
   }
 
-  auto boxes_A = random_AABBs<dim>(n, radius);
-  auto boxes_B = random_AABBs<dim>(n, radius);
+  std::vector< fm::AABB<dim> > boxes_A;
+  std::vector< fm::AABB<dim> > boxes_B;
+
+  if (filename.empty()) {
+    boxes_A = random_AABBs<dim>(n, radius);
+  } else {
+    boxes_A = read_binary< fm::AABB<dim> >(filename);
+  }
+  boxes_B = random_AABBs<dim>(n, radius);
 
   fm::AABB<dim> * d_boxes_B;
   cudaMalloc(&d_boxes_B, sizeof(fm::AABB<dim>) * n);
@@ -122,22 +135,30 @@ TEST(PerfTest, BVHSelfIntersection2D) {
   box_selfintersection_perftest<2>(10000, 0.1f);
   box_selfintersection_perftest<2>(100000, 0.01f);
   box_selfintersection_perftest<2>(1000000, 0.001f);
+
+  box_selfintersection_perftest<2>(100000, 0.01f, LBVH_DATA_DIR"/100K_boxes_2D_unstructured_mesh.bin");
 }
 
 TEST(PerfTest, BVHSelfIntersection3D) {
   box_selfintersection_perftest<3>(10000, 0.07f);
   box_selfintersection_perftest<3>(100000, 0.03f);
   box_selfintersection_perftest<3>(1000000, 0.007f);
+
+  box_selfintersection_perftest<3>(100000, 0.01f, LBVH_DATA_DIR"/100K_boxes_3D_unstructured_mesh.bin");
 }
 
 TEST(PerfTest, BVHIntersection2D) {
   box_intersection_perftest<2>(10000, 0.1f);
   box_intersection_perftest<2>(100000, 0.01f);
   box_intersection_perftest<2>(1000000, 0.001f);
+
+  box_intersection_perftest<2>(100000, 0.01f, LBVH_DATA_DIR"/100K_boxes_2D_unstructured_mesh.bin");
 }
 
 TEST(PerfTest, BVHIntersection3D) {
   box_intersection_perftest<3>(10000, 0.12f);
   box_intersection_perftest<3>(100000, 0.03f);
   box_intersection_perftest<3>(1000000, 0.007f);
+
+  box_intersection_perftest<3>(100000, 0.01f, LBVH_DATA_DIR"/100K_boxes_3D_unstructured_mesh.bin");
 }

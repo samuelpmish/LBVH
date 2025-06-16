@@ -12,29 +12,69 @@
 #include "trove/ptr.h"
 #include "generics/ldg.h"
 
-//__device__ __inline__ fm::AABB<2> loadAABB_uncached(const fm::AABB<2> * ptr)
-//{
-//    fm::AABB<2> aabb;
-//    asm("ld.global.cg.v4.f32 {%0, %1, %2, %3}, [%4];" : "=f"(aabb.min[0]), "=f"(aabb.min[1]), "=f"(aabb.max[0]), "=f"(aabb.max[1]) : "r"(&ptr->min[0]));
-//    return aabb;
-//}
+__device__ __inline__ fm::AABB<2> loadAABB_uncached(const fm::AABB<2> * ptr)
+{
+    fm::AABB<2> aabb;
+    asm("ld.global.cg.v4.f32 {%0, %1, %2, %3}, [%4];" : "=f"(aabb.min[0]), "=f"(aabb.min[1]), "=f"(aabb.max[0]), "=f"(aabb.max[1]) : "l"(&ptr->min[0]));
+    return aabb;
+}
 
-//__device__ __inline__ fm::AABB<2> loadAABB_uncached(const fm::AABB<2> * ptr)
-//{
-//    fm::AABB<2> aabb;
-//    asm("ld.global.cg.v4.f32 {%0, %1, %2, %3}, [%4];" : "=f"(aabb.x[0]), "=f"(aabb.x[1]), "=f"(aabb.y[0]), "=f"(aabb.y[1]) : "r"(&ptr->x));
-//    asm("ld.global.cg.v2.f32 {%0, %1}, [%2];" : "=f"(aabb.z[0]), "=f"(aabb.z[1]) : "r"(&ptr->z));
-//    return aabb;
-//}
+__device__ __inline__ fm::AABB<3> loadAABB_uncached(const fm::AABB<3> * ptr)
+{
+    fm::AABB<3> aabb;
+    asm("ld.global.cg.v4.f32 {%0, %1, %2, %3}, [%4];" : "=f"(aabb.min[0]), "=f"(aabb.min[1]), "=f"(aabb.min[2]), "=f"(aabb.max[0]) : "l"(&ptr->min[0]));
+    asm("ld.global.cg.v2.f32 {%0, %1}, [%2];" : "=f"(aabb.max[1]), "=f"(aabb.max[2]) : "l"(&ptr->max[1]));
+    return aabb;
+}
 
 //------------------------------------------------------------------------
 
-//__device__ __inline__ void storeAABB_uncached(AABB* ptr, const AABB& aabb)
-//{
-//    asm("st.global.cg.v4.f32 [%0], {%1, %2, %3, %4};" :: "r"(&ptr->x), "f"(aabb.x[0]), "f"(aabb.x[1]), "f"(aabb.y[0]), "f"(aabb.y[1]));
-//    asm("st.global.cg.v2.f32 [%0], {%1, %2};" :: "r"(&ptr->z), "f"(aabb.z[0]), "f"(aabb.z[1]));
-//}
+__device__ __inline__ void storeAABB_uncached(fm::AABB<2> * ptr, const fm::AABB<2> & aabb)
+{
+    asm("st.global.cg.v4.f32 [%0], {%1, %2, %3, %4};" :: "l"(&ptr->min[0]), "f"(aabb.min[0]), "f"(aabb.min[1]), "f"(aabb.max[0]), "f"(aabb.max[1]));
+}
 
+__device__ __inline__ void storeAABB_uncached(fm::AABB<3> * ptr, const fm::AABB<3> & aabb)
+{
+    asm("st.global.cg.v4.f32 [%0], {%1, %2, %3, %4};" :: "l"(&ptr->min[0]), "f"(aabb.min[0]), "f"(aabb.min[1]), "f"(aabb.min[2]), "f"(aabb.max[0]));
+    asm("st.global.cg.v2.f32 [%0], {%1, %2};" :: "l"(&ptr->max[1]), "f"(aabb.max[1]), "f"(aabb.max[2]));
+}
+
+#define METHOD 2
+
+template < int dim >
+__device__ __inline__ fm::AABB<dim> load_box(const fm::AABB<dim> * ptr) {
+#if METHOD == 0
+  return *ptr;
+#endif
+#if METHOD == 1
+  return __ldg(ptr);
+#endif
+#if METHOD == 2
+  return loadAABB_uncached(ptr);
+#endif
+#if METHOD == 3
+  trove::coalesced_ptr < const fm::AABB<dim> > trove_ptr(ptr);
+  return *ptr;
+#endif
+}
+
+template < int dim >
+__device__ __inline__ void store_box(fm::AABB<dim> * ptr, const fm::AABB<dim> & box) {
+#if METHOD == 0
+  *ptr = box;
+#endif
+#if METHOD == 1
+  *ptr = box;
+#endif
+#if METHOD == 2
+  storeAABB_uncached(ptr, box);
+#endif
+#if METHOD == 3
+  trove::coalesced_ptr < fm::AABB<dim> > trove_ptr(ptr);
+  *trove_ptr = box;
+#endif
+}
 
 __global__ void morton_kernel(
   uint64_t * code_ids,
@@ -126,7 +166,7 @@ __global__ void permute_objects(
 
   if (tid < num_objects) {
     uint64_t id = codes[tid] & mask;
-    permuted_objects[tid] = unsorted_objects[id];
+    permuted_objects[tid] = load_box(&unsorted_objects[id]);
   }
 
 }
@@ -156,7 +196,7 @@ __global__ void connect_radix_tree(
      int32_t * parents,
         int2 * children,
         int2 * rightmost_leaf_in_subtree,
-    uint64_t * codes,
+  const __restrict__ uint64_t * codes,
      int32_t   n) {
 
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -267,14 +307,14 @@ __global__ void update_tree_aabbs(
       __threadfence();
 
       //fm::AABB<dim> sibling_bv = trove_boxes[sibling];
-      fm::AABB<dim> sibling_bv = boxes[sibling];
+      fm::AABB<dim> sibling_bv = load_box(&boxes[sibling]);
 
       bv = union_of(bv, sibling_bv);
 
       tid = parent;
       parent = parents[tid];
 
-      boxes[tid] = bv;
+      store_box(&boxes[tid], bv);
 
       // Ensure write is visible before next iteration
       __threadfence();
@@ -392,7 +432,7 @@ __global__ void traverse(
 
   if (tid < num_queries) {
 
-    fm::AABB<dim> query_box = __ldg(&query_boxes[tid]);
+    fm::AABB<dim> query_box = load_box(&query_boxes[tid]);
   
     // Allocate traversal stack from thread-local memory,
     // and push NULL to indicate that there are no postponed nodes.
@@ -409,8 +449,8 @@ __global__ void traverse(
       int child_left  = c.x;
       int child_right = c.y;
 
-      bool overlap_left  = intersecting(__ldg(&bvh_boxes[child_left]), query_box);
-      bool overlap_right = intersecting(__ldg(&bvh_boxes[child_right]), query_box);
+      bool overlap_left  = intersecting(load_box(&bvh_boxes[child_left]), query_box);
+      bool overlap_right = intersecting(load_box(&bvh_boxes[child_right]), query_box);
 
       // If the query overlaps with a leaf node, report a collision.
       if (overlap_left && (child_left < num_leaves)) {

@@ -54,14 +54,14 @@ void box_selfintersection_test(int n, float radius) {
   int max_pairs = 1000000;
   GPU::intersection_list intersections(max_pairs);
 
-  for (int k = 0; k < 5; k++) {
+  for (int k = 0; k < 100; k++) {
 
     GPU::BVH<dim> bvh(boxes, global_box);
 
     find_intersections(intersections, bvh);
 
     EXPECT_EQ(pairs1.size(), intersections.pairs_found);
-    if (pairs1.size() == intersections.pairs_found && intersections.pairs_found <= max_pairs) {
+    if (k == 0 && pairs1.size() == intersections.pairs_found && intersections.pairs_found <= max_pairs) {
       std::vector< std::array<int, 2> > pairs2(intersections.pairs_found);
       cudaMemcpy(&pairs2[0], thrust::raw_pointer_cast(intersections.pairs.data()), sizeof(int2) * intersections.pairs_found, cudaMemcpyDeviceToHost);
 
@@ -133,24 +133,24 @@ void box_intersection_test(int n, float radius) {
 
 TEST(UnitTest, BVHSelfIntersection2D) {
   for (int i = 0; i < 10; i++) {
-    box_selfintersection_test<2>(1000, 0.02f);
+    box_selfintersection_test<2>(10000, 0.02f);
   }
 }
 
 TEST(UnitTest, BVHSelfIntersection3D) {
   for (int i = 0; i < 10; i++) {
-    box_selfintersection_test<3>(1000, 0.05f);
+    box_selfintersection_test<3>(10000, 0.05f);
   }
 }
 
 TEST(UnitTest, BVHIntersection2D) {
   for (int i = 0; i < 10; i++) {
-    box_intersection_test<2>(1000, 0.02f);
+    box_intersection_test<2>(10000, 0.02f);
   }
 }
 
 TEST(UnitTest, BVHIntersection3D) {
   for (int i = 0; i < 10; i++) {
-    box_intersection_test<3>(1000, 0.05f);
+    box_intersection_test<3>(10000, 0.05f);
   }
 }
