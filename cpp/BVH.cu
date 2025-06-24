@@ -40,7 +40,7 @@ __device__ __inline__ void storeAABB_uncached(fm::AABB<3> * ptr, const fm::AABB<
     asm("st.global.cg.v2.f32 [%0], {%1, %2};" :: "l"(&ptr->max[1]), "f"(aabb.max[1]), "f"(aabb.max[2]));
 }
 
-#define METHOD 2
+#define METHOD 3
 
 template < int dim >
 __device__ __inline__ fm::AABB<dim> load_box(const fm::AABB<dim> * ptr) {
